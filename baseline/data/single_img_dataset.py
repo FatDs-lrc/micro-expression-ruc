@@ -1,0 +1,62 @@
+import os, sys, json
+sys.path.insert(0, '../')
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms, utils
+import torchvision.transforms.functional as TF
+from utils.ImgUtils import show_img, PaddingToSquare, CropFromHead
+from PIL import Image
+
+class SingleImgDataset(Dataset):
+    """ For single img (Not img Sequence) """
+
+    def __init__(self, _file, root_dir, opt=None):
+        self.transform = self.get_transforms(opt)
+        self.data = json.load(open(_file))
+        self.root_dir = root_dir
+
+    def __getitem__(self, idx):
+        record = self.data[idx]
+        path = os.path.join(self.root_dir, record['path'])
+        img = Image.open(path)
+        # print(type(self.transform))
+        img = self.transform(img)
+        label = record['label']
+        return {'img': img, "label": label, 'path': path}
+
+
+    def __len__(self):
+        return len(self.data)
+
+    def get_transforms(self, opt):
+        transform_list = []
+        # , transforms.CenterCrop(opt['resize'])
+        transform_list += [PaddingToSquare(), transforms.Resize((opt.resize, opt.resize), interpolation=2) , transforms.RandomHorizontalFlip()]
+        transform_list += [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        return transforms.Compose(transform_list)
+
+    def name(self):
+        return 'Single Img Dataset'
+
+def SingleImgDataLoader(opt, isTrain=None):
+    if isTrain is None:
+        isTrain = opt.isTrain
+    label_map = opt.label_map_trn if isTrain else opt.label_map_tst
+    dataset = SingleImgDataset(label_map, opt.img_root, opt)
+    batch_size = opt.train_batch if isTrain else opt.test_batch
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=opt.workers,
+        pin_memory=False,
+        shuffle=isTrain,
+    )
+    return dataloader
+
+# from prepare import img_root as IMG_ROOT
+# import argparse
+# parser = argparse.ArgumentParser(description='PyTorch Micro Expression Recognition')
+# parser.add_argument('-r', '--resize', dest='resize', type=int, default=128, help='resize img width to fixed shape')
+# parser = parser.parse_args()
+# s = SingleImgDataset('auxiliary/single_img_train.json', IMG_ROOT, parser)
+# data = s[0]
+# show_img(data['img'])
